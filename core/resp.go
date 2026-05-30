@@ -69,7 +69,6 @@ func readArray(data []byte) ([]any, int, error) {
 
 	cmds := make([]any, numCmds)
 	pos += delta
-	fmt.Println("num Cmds", numCmds, delta, string(data[pos:]))
 
 	for i := range numCmds {
 		val, delta, err := DecodeOne(data[pos:])
@@ -117,7 +116,7 @@ func DecodeArrayString(data []byte) ([]string, error) {
 	}
 
 	// type interface ?
-	ts := value.([]interface{})
+	ts := value.([]any)
 	tokens := make([]string, len(ts))
 	for i := range tokens {
 		tokens[i] = ts[i].(string)
@@ -126,15 +125,16 @@ func DecodeArrayString(data []byte) ([]string, error) {
 	return tokens, nil
 }
 
-func Encode(value any, isSimple bool) string {
-	switch value.(type) {
+func Encode(value any, isSimple bool) []byte {
+	// i am dumb i realised at this point (again)
+	switch v := value.(type) {
 	case string:
 		if isSimple {
-			return fmt.Sprintf("+%s\r\n", value)
+			return fmt.Appendf(nil, "+%s\r\n", v)
 		}
-		return fmt.Sprintf("$%s\r\n", value)
+		return fmt.Appendf(nil, "$%d\r\n%s\r\n", len(v), value)
 	default:
 		// TODO: fix this
-		return "+OK\r\n"
+		return []byte("+OK\r\n")
 	}
 }
