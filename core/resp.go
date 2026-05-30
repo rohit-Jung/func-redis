@@ -21,56 +21,63 @@ func readError(data []byte) (string, int, error) {
 	return readSimpleString(data)
 }
 
-func readInt(data []byte) (int, int, error) {
-	pos := 1
-	indexOfCrlf := bytes.Index(data, []byte("\r\n"))
-	if indexOfCrlf == -1 {
+// this was majorly separated from readInt not because
+// of reuse but because of pos value; it had to be 1 for readInt but not for other use cases
+func readNums(data []byte) (int, int, error) {
+	numInBytes, _, ok := bytes.Cut(data, []byte("\r\n"))
+	if !ok {
 		return 0, 0, fmt.Errorf("ERR Error Parsing")
 	}
 
-	num, err := strconv.Atoi(string(data[pos:indexOfCrlf]))
+	num, err := strconv.Atoi(string(numInBytes))
 	if err != nil {
 		return 0, 0, err
 	}
 
-	return num, pos + indexOfCrlf + 2, nil
+	return num, len(numInBytes) + 2, nil
+}
+
+func readInt(data []byte) (int, int, error) {
+	pos := 1
+	num, delta, err := readNums(data[pos:])
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return num, pos + delta, nil
 }
 
 func readBulkString(data []byte) (string, int, error) {
 	pos := 1
-
-	numBytes, err := strconv.Atoi(string(data[pos]))
+	numBytes, delta, err := readNums(data[pos:])
 	if err != nil {
 		return "", 0, err
 	}
 
-	pos += 3 // initial <num>/r/n
-	fmt.Println("pos", pos, pos+numBytes)
+	pos += delta // initial <num>/r/n
 	contents := data[pos : pos+numBytes]
-	pos += numBytes
-	fmt.Println("numBytes", numBytes, "data", string(contents), pos)
-
-	return string(contents), pos + int(numBytes) + 2, nil
+	return string(contents), pos + int(numBytes) + 2, nil // +2  for last \r\n
 }
 
-func readArray(data []byte) ([]string, int, error) {
-	pos := 1 // it's the inital '*'
+func readArray(data []byte) ([]any, int, error) {
+	pos := 0
 
-	numCmds, err := strconv.Atoi(string(data[pos])) // number of cmds to parse
+	numCmds, delta, err := readInt(data)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	cmds := make([]string, numCmds)
-	pos += 2
+	cmds := make([]any, numCmds)
+	pos += delta
+	fmt.Println("num Cmds", numCmds, delta, string(data[pos:]))
 
-	for range numCmds {
-		val, delta, err := DecodeOne(data[pos:]) // +2 is for \r\n
+	for i := range numCmds {
+		val, delta, err := DecodeOne(data[pos:])
 		if err != nil {
 			return nil, 0, err
 		}
 
-		cmds = append(cmds, val.(string))
+		cmds[i] = val
 		pos += delta
 	}
 
@@ -87,6 +94,8 @@ func DecodeOne(data []byte) (any, int, error) {
 		return readBulkString(data)
 	case ':':
 		return readInt(data)
+	case '*':
+		return readArray(data)
 	}
 	return nil, 0, nil
 }
