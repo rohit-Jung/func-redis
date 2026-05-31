@@ -12,40 +12,7 @@ import (
 	"github.com/rohit-Jung/func-redis/core"
 )
 
-func readCommand(conn net.Conn) (*core.RedisCmd, error) {
-	buf := make([]byte, 512)
-	n, err := conn.Read(buf)
-	if err != nil {
-		log.Print("oops reading error", err)
-		return nil, err
-	}
-
-	tokens, err := core.DecodeArrayString(buf[:n])
-	if err != nil {
-		log.Print("Error decoding to array of strings")
-	}
-
-	fmt.Println("array strings", tokens)
-	return &core.RedisCmd{
-		Cmd:  tokens[0],
-		Args: tokens[1:],
-	}, nil
-}
-
-func respondError(err error, conn net.Conn) {
-	respErrFormat := fmt.Sprintf("-%s\r\n", err)
-	conn.Write([]byte(respErrFormat))
-}
-
-func respondCmd(cmd *core.RedisCmd, conn net.Conn) {
-	err := core.EvalAndRespond(*cmd, conn)
-	if err != nil {
-		log.Print("Encountered write error", err)
-		respondError(err, conn)
-	}
-}
-
-func RunSyncServer() {
+func RunSyncServer() error {
 	log.Println("starting sync tcp server on", config.Host, config.Port)
 
 	connClients := 1
@@ -53,7 +20,7 @@ func RunSyncServer() {
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 	lsnr, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal("Error initiating tcp connection", err)
+		return err
 	}
 
 	for {
@@ -66,8 +33,10 @@ func RunSyncServer() {
 		log.Println("Connected to ", conn.RemoteAddr())
 		connClients += 1
 
+		// breaks only when client disconnects or QUIT command is issued
+		// (so sync server is problem here)
 		for {
-			cmd, err := readCommand(conn) // read the command into string
+			cmd, err := core.ReadCommand(conn) // read the command into string
 			if err != nil {
 				conn.Close()
 				connClients -= 1
@@ -80,7 +49,7 @@ func RunSyncServer() {
 				break
 			}
 
-			respondCmd(cmd, conn)
+			cmd.Respond(conn)
 		}
 	}
 }
