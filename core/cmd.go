@@ -22,6 +22,7 @@ func ReadCommand(conn io.ReadWriteCloser) (*RedisCmd, error) {
 	tokens, err := DecodeArrayString(buf[:n])
 	if err != nil {
 		log.Print("Error decoding to array of strings")
+		return nil, err
 	}
 
 	return &RedisCmd{

@@ -84,6 +84,10 @@ func readArray(data []byte) ([]any, int, error) {
 }
 
 func DecodeOne(data []byte) (any, int, error) {
+	if len(data) <= 0 {
+	  return "", 0, fmt.Errorf("ERR error while decoding. len not sufficient")
+	}
+
 	switch data[0] {
 	case '+':
 		return readSimpleString(data)
