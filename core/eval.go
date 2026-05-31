@@ -2,12 +2,12 @@ package core
 
 import (
 	"fmt"
-	"net"
+	"io"
 )
 
 var errEvalPingInvalidArgs = fmt.Errorf("ERR wrong number of arguments for 'ping' command")
 
-func evalPingAndRespond(args []string, conn net.Conn) error {
+func evalPingAndRespond(args []string, conn io.ReadWriteCloser) error {
 	if len(args) >= 2 {
 		return errEvalPingInvalidArgs
 	}
@@ -22,7 +22,7 @@ func evalPingAndRespond(args []string, conn net.Conn) error {
 	return err
 }
 
-func EvalAndRespond(cmd RedisCmd, conn net.Conn) error {
+func EvalAndRespond(cmd RedisCmd, conn io.ReadWriteCloser) error {
 	// we are doing simple string for now
 	switch cmd.Cmd {
 	case "PING":
