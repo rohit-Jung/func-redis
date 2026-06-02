@@ -124,6 +124,52 @@ func evalTTLandRespond(args []string, conn io.ReadWriteCloser) error {
 	return nil
 }
 
+func evalDELETEAndRespond(args []string, conn io.ReadWriteCloser) error {
+	if len(args) < 1 {
+		return invalidArgsError("delete")
+	}
+
+	keysDeleted := 0
+
+	for i := range args {
+		if Delete(args[i]) {
+			keysDeleted++
+		}
+	}
+
+	conn.Write(Encode(keysDeleted, false))
+	return nil
+}
+
+func evalEXPIREAndRespond(args []string, conn io.ReadWriteCloser) error {
+	if len(args) != 2 {
+		return invalidArgsError("expire")
+	}
+
+	key := args[0]
+	obj := Get(key)
+
+	if obj == nil {
+		conn.Write(Encode(0, false))
+		return nil
+	}
+
+	duration, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		return errParseError
+	}
+
+	expirationMs := time.Now().UnixMilli() + duration*1000
+	obj.ExpiresAt = expirationMs
+	conn.Write(Encode(1, false))
+
+	return nil
+}
+
+func evalUnknownAndRespond(cmd string, args []string) error {
+	return fmt.Errorf("ERR unknown command '%s', with args beginning with: '%s'", cmd, args[0])
+}
+
 func EvalAndRespond(cmd RedisCmd, conn io.ReadWriteCloser) error {
 	// we are doing simple string for now
 	switch cmd.Cmd {
@@ -135,10 +181,11 @@ func EvalAndRespond(cmd RedisCmd, conn io.ReadWriteCloser) error {
 		return evalGETandRespond(cmd.Args, conn)
 	case "TTL":
 		return evalTTLandRespond(cmd.Args, conn)
+	case "DEL":
+		return evalDELETEAndRespond(cmd.Args, conn)
+	case "EXPIRE":
+		return evalEXPIREAndRespond(cmd.Args, conn)
 	default:
-		if _, err := conn.Write(respNil); err != nil {
-			return err
-		}
-		return nil
+		return evalUnknownAndRespond(cmd.Cmd, cmd.Args)
 	}
 }

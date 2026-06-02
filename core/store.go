@@ -37,3 +37,12 @@ func Put(k string, obj *Obj) {
 func Get(k string) *Obj {
 	return store[k]
 }
+
+func Delete(k string) bool {
+	if _, ok := store[k]; ok {
+		delete(store, k)
+		return true
+	}
+
+	return false
+}
