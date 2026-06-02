@@ -85,7 +85,7 @@ func readArray(data []byte) ([]any, int, error) {
 
 func DecodeOne(data []byte) (any, int, error) {
 	if len(data) <= 0 {
-	  return "", 0, fmt.Errorf("ERR error while decoding. len not sufficient")
+		return "", 0, fmt.Errorf("ERR error while decoding. len not sufficient")
 	}
 
 	switch data[0] {
@@ -137,6 +137,8 @@ func Encode(value any, isSimple bool) []byte {
 			return fmt.Appendf(nil, "+%s\r\n", v)
 		}
 		return fmt.Appendf(nil, "$%d\r\n%s\r\n", len(v), value)
+	case int64:
+		return fmt.Appendf(nil, ":%d\r\n", v)
 	default:
 		// TODO: fix this
 		return []byte("+OK\r\n")
