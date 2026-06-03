@@ -185,6 +185,10 @@ func EvalAndRespond(cmd RedisCmd, conn io.ReadWriteCloser) error {
 		return evalDELETEAndRespond(cmd.Args, conn)
 	case "EXPIRE":
 		return evalEXPIREAndRespond(cmd.Args, conn)
+	case "COMMAND":
+		return evalPingAndRespond(cmd.Args, conn)
+	case "INFO":
+		return evalPingAndRespond(cmd.Args, conn)
 	default:
 		return evalUnknownAndRespond(cmd.Cmd, cmd.Args)
 	}
