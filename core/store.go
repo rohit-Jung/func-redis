@@ -35,6 +35,13 @@ func Put(k string, obj *Obj) {
 }
 
 func Get(k string) *Obj {
+	// Active Delete
+	if obj, ok := store[k]; ok &&
+		obj.ExpiresAt != -1 &&
+		time.Now().UnixMilli() > obj.ExpiresAt {
+		Delete(k)
+	}
+
 	return store[k]
 }
 

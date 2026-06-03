@@ -4,16 +4,20 @@ import (
 	"log"
 	"net"
 	"syscall"
+	"time"
 
 	"github.com/rohit-Jung/func-redis/config"
 	"github.com/rohit-Jung/func-redis/core"
 )
 
+var connClients int = 0
+var maxClients int = 20_000
+
+var deletionFrequency time.Duration = 1 * time.Second
+var lastDeletedTime time.Time = time.Now()
+
 func RunAsyncServer() error {
 	log.Println("starting async tcp server on", config.Host, config.Port)
-
-	maxClients := 20_000
-	connClients := 0
 
 	// what is the last arg proto ?
 	serverFD, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM|syscall.O_NONBLOCK, 0)
@@ -68,6 +72,12 @@ func RunAsyncServer() error {
 	// make events to hold new incoming events
 	events := make([]syscall.EpollEvent, maxClients)
 	for {
+		// last deleted time has passed
+		if time.Now().After(lastDeletedTime.Add(deletionFrequency)) {
+			core.DeleteExpiredKeys()
+			lastDeletedTime = time.Now()
+		}
+
 		// what is -1 here ?
 		nevents, err := syscall.EpollWait(epollFD, events[:], -1)
 		// do  not break the loop
@@ -113,9 +123,7 @@ func RunAsyncServer() error {
 
 				cmd.Respond(comm)
 			}
-
 		}
-
 	}
 
 }
