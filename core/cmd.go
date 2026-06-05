@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 )
 
 type RedisCmd struct {
@@ -11,24 +12,45 @@ type RedisCmd struct {
 	Args []string
 }
 
-func ReadCommand(conn io.ReadWriteCloser) (*RedisCmd, error) {
+type RedisCmds []*RedisCmd
+
+func toArrayString(data []any) ([]string, error) {
+	result := make([]string, len(data))
+	for i := range data {
+		result[i] = data[i].(string)
+	}
+	return result, nil
+}
+
+func ReadCommands(conn io.ReadWriteCloser) (RedisCmds, error) {
 	buf := make([]byte, 512)
 	n, err := conn.Read(buf)
 	if err != nil {
-		log.Print("oops reading error", err)
 		return nil, err
 	}
 
-	tokens, err := DecodeArrayString(buf[:n])
+	values, err := Decode(buf[:n])
 	if err != nil {
-		log.Print("Error decoding to array of strings")
 		return nil, err
 	}
 
-	return &RedisCmd{
-		Cmd:  tokens[0],
-		Args: tokens[1:],
-	}, nil
+	cmds := make([]*RedisCmd, 0)
+	for _, value := range values {
+		tokens, err := toArrayString(value.([]any))
+
+		if err != nil {
+			return nil, err
+		}
+		cmds = append(
+			cmds,
+			&RedisCmd{
+				Cmd:  strings.ToUpper(tokens[0]),
+				Args: tokens[1:],
+			},
+		)
+	}
+
+	return cmds, nil
 }
 
 func respondError(err error, conn io.ReadWriteCloser) {
@@ -36,10 +58,12 @@ func respondError(err error, conn io.ReadWriteCloser) {
 	conn.Write([]byte(respErrFormat))
 }
 
-func (cmd RedisCmd) Respond(conn io.ReadWriteCloser) {
-	err := EvalAndRespond(cmd, conn)
+func (cmds RedisCmds) Respond(conn io.ReadWriteCloser) {
+	buf, err := EvalCommand(cmds)
 	if err != nil {
 		log.Print("Encountered write error\t", err)
 		respondError(err, conn)
 	}
+
+	conn.Write(buf)
 }

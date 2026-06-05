@@ -3,6 +3,7 @@ package core
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strconv"
 )
@@ -54,7 +55,7 @@ func readBulkString(data []byte) (string, int, error) {
 		return "", 0, err
 	}
 
-	pos += delta // initial <num>/r/n
+	pos += delta
 	contents := data[pos : pos+numBytes]
 	return string(contents), pos + int(numBytes) + 2, nil // +2  for last \r\n
 }
@@ -100,33 +101,30 @@ func DecodeOne(data []byte) (any, int, error) {
 	case '*':
 		return readArray(data)
 	}
+
 	return nil, 0, nil
 }
 
-func Decode(data []byte) (any, error) {
-	value, _, err := DecodeOne(data)
-	if err != nil {
-		return nil, err
+func Decode(data []byte) ([]any, error) {
+	if len(data) <= 0 {
+		return nil, errors.New("ERR: not enough length to decode")
 	}
 
-	return value, nil
-}
+	result := make([]any, 0)
+	index := 0
 
-// DecodeArrayString receive byte of data, decode em, convert to tokens  and returns
-func DecodeArrayString(data []byte) ([]string, error) {
-	value, err := Decode(data)
-	if err != nil {
-		return nil, err
+	// up till index doesn't crosses len(data) which will not happen
+	for index < len(data) {
+		value, delta, err := DecodeOne(data[index:])
+		if err != nil {
+			return nil, err
+		}
+
+		index += delta
+		result = append(result, value)
 	}
 
-	// type interface ?
-	ts := value.([]any)
-	tokens := make([]string, len(ts))
-	for i := range tokens {
-		tokens[i] = ts[i].(string)
-	}
-
-	return tokens, nil
+	return result, nil
 }
 
 func Encode(value any, isSimple bool) []byte {

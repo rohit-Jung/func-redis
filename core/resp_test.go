@@ -12,7 +12,7 @@ func TestSimpleStringDecode(t *testing.T) {
 		"+OK\r\n": "OK",
 	}
 	for k, v := range cases {
-		value, _ := core.Decode([]byte(k))
+		value, _, _ := core.DecodeOne([]byte(k))
 		if v != value {
 			t.Fail()
 		}
@@ -24,7 +24,7 @@ func TestError(t *testing.T) {
 		"-Error message\r\n": "Error message",
 	}
 	for k, v := range cases {
-		value, _ := core.Decode([]byte(k))
+		value, _, _ := core.DecodeOne([]byte(k))
 		if v != value {
 			t.Fail()
 		}
@@ -37,7 +37,7 @@ func TestInt64(t *testing.T) {
 		":1000\r\n": 1000,
 	}
 	for k, v := range cases {
-		value, _ := core.Decode([]byte(k))
+		value, _, _ := core.DecodeOne([]byte(k))
 		if v != value {
 			t.Fail()
 		}
@@ -51,7 +51,7 @@ func TestBulkStringDecode(t *testing.T) {
 		"$0\r\n\r\n":             "",
 	}
 	for k, v := range cases {
-		value, _ := core.Decode([]byte(k))
+		value, _, _ := core.DecodeOne([]byte(k))
 		if v != value {
 			t.Fail()
 		}
@@ -59,16 +59,17 @@ func TestBulkStringDecode(t *testing.T) {
 }
 
 func TestArrayDecode(t *testing.T) {
-	cases := map[string][]interface{}{
+	cases := map[string][]any{
 		"*0\r\n":                                                   {},
 		"*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n":                     {"hello", "world"},
 		"*3\r\n:1\r\n:2\r\n:3\r\n":                                 {int64(1), int64(2), int64(3)},
 		"*5\r\n:1\r\n:2\r\n:3\r\n:4\r\n$5\r\nhello\r\n":            {int64(1), int64(2), int64(3), int64(4), "hello"},
-		"*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Hello\r\n-World\r\n": {[]int64{int64(1), int64(2), int64(3)}, []interface{}{"Hello", "World"}},
+		"*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Hello\r\n-World\r\n": {[]int64{int64(1), int64(2), int64(3)}, []any{"Hello", "World"}},
 	}
+
 	for k, v := range cases {
-		value, _ := core.Decode([]byte(k))
-		array := value.([]interface{})
+		value, _, _ := core.DecodeOne([]byte(k))
+		array := value.([]any)
 		if len(array) != len(v) {
 			t.Fail()
 		}

@@ -1,5 +1,4 @@
 // Package main -
-
 package main
 
 import (
@@ -11,6 +10,6 @@ import (
 func main() {
 	err := server.RunAsyncServer()
 	if err != nil {
-		log.Fatal("Error running server")
+		log.Fatal("Error running server", err)
 	}
 }

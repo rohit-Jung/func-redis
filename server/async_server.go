@@ -113,7 +113,7 @@ func RunAsyncServer() error {
 				}
 
 				// read command and respond
-				cmd, err := core.ReadCommand(comm)
+				cmds, err := core.ReadCommands(comm)
 				if err != nil {
 					log.Print("Error reading command")
 					connClients -= 1
@@ -121,7 +121,7 @@ func RunAsyncServer() error {
 					continue
 				}
 
-				cmd.Respond(comm)
+				cmds.Respond(comm)
 			}
 		}
 	}

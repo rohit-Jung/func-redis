@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/rohit-Jung/func-redis/config"
@@ -24,7 +23,6 @@ func NewObject(v any, durationMs int64) *Obj {
 		expiry = time.Now().UnixMilli() + durationMs
 	}
 
-	fmt.Print("Setting expiry", expiry, durationMs)
 
 	return &Obj{
 		Value:     v,

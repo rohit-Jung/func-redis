@@ -36,7 +36,8 @@ func RunSyncServer() error {
 		// breaks only when client disconnects or QUIT command is issued
 		// (so sync server is problem here)
 		for {
-			cmd, err := core.ReadCommand(conn) // read the command into string
+			cmds, err := core.ReadCommands(conn) // read the command into string
+
 			if err != nil {
 				conn.Close()
 				connClients -= 1
@@ -49,7 +50,7 @@ func RunSyncServer() error {
 				break
 			}
 
-			cmd.Respond(conn)
+			cmds.Respond(conn)
 		}
 	}
 }
