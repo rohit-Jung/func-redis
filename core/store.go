@@ -31,6 +31,7 @@ func Put(k string, obj *Obj) {
 	}
 
 	store[k] = obj
+	IncrementDbStat(0, "keys")
 }
 
 func Get(k string) *Obj {
@@ -47,6 +48,7 @@ func Get(k string) *Obj {
 func Delete(k string) bool {
 	if _, ok := store[k]; ok {
 		delete(store, k)
+		DecrementDbStat(0, "keys")
 		return true
 	}
 

@@ -152,12 +152,31 @@ func evalEXPIRE(args []string) []byte {
 	return Encode(1, false)
 }
 
+func evalINFO(args []string) []byte {
+	buffer := bytes.NewBuffer(nil)
+	buffer.WriteString("# Keyspace\r\n")
+	for i, keystat := range KeymapsStat {
+		dbInfo := fmt.Sprintf("db%dkeys=%d,expires=0,avg_ttl=0\r\n", i, keystat["keys"])
+		buffer.WriteString(dbInfo)
+	}
+
+	return Encode(buffer.String(), false)
+}
+
 func evalUnknown(cmd string, args []string) []byte {
 	return Encode(fmt.Sprintf("ERR unknown command '%s', with args beginning with: '%s'", cmd, args[0]), true)
 }
 
 func evalRewriteAOF() []byte {
 	DumpAllAof()
+	return respOk
+}
+
+func evalLatency() []byte {
+	return Encode([]string{}, false)
+}
+
+func evalClient() []byte {
 	return respOk
 }
 
@@ -181,7 +200,11 @@ func EvalCommand(cmds RedisCmds) ([]byte, error) {
 		case "COMMAND":
 			buffer.Write(evalPing(cmd.Args))
 		case "INFO":
-			buffer.Write(evalPing(cmd.Args))
+			buffer.Write(evalINFO(cmd.Args))
+		case "CLIENT":
+			buffer.Write(evalClient())
+		case "LATENCY":
+			buffer.Write(evalLatency())
 		case "BGREWRITEAOF":
 			buffer.Write(evalRewriteAOF())
 		default:
