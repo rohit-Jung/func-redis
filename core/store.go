@@ -6,27 +6,22 @@ import (
 	"github.com/rohit-Jung/func-redis/config"
 )
 
-type Obj struct {
-	Value     any
-	ExpiresAt int64
-}
-
 var store map[string]*Obj
 
 func init() {
 	store = make(map[string]*Obj)
 }
 
-func NewObject(v any, durationMs int64) *Obj {
+func NewObject(v any, durationMs int64, oType uint8, oEncoding uint8) *Obj {
 	var expiry int64 = -1
 	if durationMs > 0 {
 		expiry = time.Now().UnixMilli() + durationMs
 	}
 
-
 	return &Obj{
-		Value:     v,
-		ExpiresAt: int64(expiry),
+		TypeEncoding: oType | oEncoding,
+		Value:        v,
+		ExpiresAt:    int64(expiry),
 	}
 }
 
