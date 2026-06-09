@@ -156,6 +156,11 @@ func evalUnknown(cmd string, args []string) []byte {
 	return Encode(fmt.Sprintf("ERR unknown command '%s', with args beginning with: '%s'", cmd, args[0]), true)
 }
 
+func evalRewriteAOF() []byte {
+	DumpAllAof()
+	return respOk
+}
+
 func EvalCommand(cmds RedisCmds) ([]byte, error) {
 	buffer := bytes.NewBuffer(nil)
 
@@ -177,6 +182,8 @@ func EvalCommand(cmds RedisCmds) ([]byte, error) {
 			buffer.Write(evalPing(cmd.Args))
 		case "INFO":
 			buffer.Write(evalPing(cmd.Args))
+		case "BGREWRITEAOF":
+			buffer.Write(evalRewriteAOF())
 		default:
 			buffer.Write(evalUnknown(cmd.Cmd, cmd.Args))
 		}
