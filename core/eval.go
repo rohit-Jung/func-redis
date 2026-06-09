@@ -40,6 +40,7 @@ func evalSET(args []string) []byte {
 
 	var expirationMs int64 = -1
 	key, value := args[0], args[1]
+	oType, oEncoding := deduceTypeEncoding(value)
 
 	for i := 2; i < len(args); i++ {
 		switch args[i] {
@@ -62,7 +63,7 @@ func evalSET(args []string) []byte {
 		}
 	}
 
-	Put(key, NewObject(value, expirationMs))
+	Put(key, NewObject(value, expirationMs, oType, oEncoding))
 	return respOk
 }
 
