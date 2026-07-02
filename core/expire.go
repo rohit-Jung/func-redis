@@ -34,6 +34,8 @@ func expireSample() float32 {
 		if limit == 0 {
 			break
 		}
+
+		limit--
 	}
 
 	return float32(expiredCount) / float32(20.0)
