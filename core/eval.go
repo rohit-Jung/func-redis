@@ -82,7 +82,7 @@ func evalGET(args []string) []byte {
 	}
 
 	// expired
-	if obj.ExpiresAt != -1 && obj.ExpiresAt <= time.Now().UnixMilli() {
+	if hasExpired(obj) {
 		return respNil
 	}
 
@@ -103,12 +103,13 @@ func evalTTL(args []string) []byte {
 	}
 
 	// key exist but no expiry
-	if obj.ExpiresAt == -1 {
+	exp, isExpSet := getExpiry(obj)
+	if !isExpSet {
 		return respOne
 	}
 
-	durationMs := obj.ExpiresAt - time.Now().UnixMilli()
-	if durationMs < 0 {
+	durationMs := exp - uint32(time.Now().UnixMilli())
+	if exp < uint32(time.Now().UnixMilli()) {
 		return respTwo
 	}
 
@@ -149,11 +150,42 @@ func evalEXPIRE(args []string) []byte {
 	}
 
 	expirationMs := time.Now().UnixMilli() + duration*1000
-	obj.ExpiresAt = expirationMs
+	setExpiry(obj, uint32(expirationMs))
 	return Encode(1, false)
 }
 
-func evalINFO(args []string) []byte {
+// if no object creates and puts
+// increases it and stores the formatInt
+func evalINCR(args []string) []byte {
+	if len(args) < 0 {
+		return Encode(invalidArgsError("incr"), true)
+	}
+
+	key := args[0]
+	obj := Get(key)
+
+	if obj == nil {
+		newObj := NewObject("0", -1, OBJ_TYPE_STRING, OBJ_ENCODING_INT)
+		Put(key, newObj)
+	}
+
+	// check encodings and type
+	if err := assertEncoding(obj.TypeEncoding, OBJ_ENCODING_INT); err != nil {
+		return Encode(err, false)
+	}
+
+	if err := assertType(obj.TypeEncoding, OBJ_TYPE_STRING); err != nil {
+		return Encode(err, false)
+	}
+
+	i, _ := strconv.ParseInt(obj.Value.(string), 10, 64)
+	i += 1
+	obj.Value = strconv.FormatInt(i, 10)
+
+	return Encode(i, false)
+}
+
+func evalINFO(_ []string) []byte {
 	buffer := bytes.NewBuffer(nil)
 	buffer.WriteString("# Keyspace\r\n")
 	for i, keystat := range KeymapsStat {
@@ -202,6 +234,8 @@ func EvalCommand(cmds RedisCmds) ([]byte, error) {
 			buffer.Write(evalPing(cmd.Args))
 		case "INFO":
 			buffer.Write(evalINFO(cmd.Args))
+		case "INCR":
+			buffer.Write(evalINCR(cmd.Args))
 		case "CLIENT":
 			buffer.Write(evalClient())
 		case "LATENCY":
