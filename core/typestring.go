@@ -8,7 +8,8 @@ import "strconv"
 func deduceTypeEncoding(v string) (uint8, uint8) {
 	oType := OBJ_TYPE_STRING
 
-	if _, err := strconv.ParseInt(v, 10, 64); err != nil {
+	// if you can parse; then
+	if _, err := strconv.ParseInt(v, 10, 64); err == nil {
 		return oType, OBJ_ENCODING_INT
 	}
 
