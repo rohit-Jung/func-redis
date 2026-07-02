@@ -7,22 +7,29 @@ import (
 )
 
 var store map[string]*Obj
+var expires map[*Obj]uint32
 
 func init() {
 	store = make(map[string]*Obj)
+	expires = make(map[*Obj]uint32)
+}
+
+func setExpiry(obj *Obj, durationMs uint32) {
+	expires[obj] = uint32(time.Now().UnixMilli()) + durationMs
 }
 
 func NewObject(v any, durationMs int64, oType uint8, oEncoding uint8) *Obj {
-	var expiry int64 = -1
-	if durationMs > 0 {
-		expiry = time.Now().UnixMilli() + durationMs
+	obj := &Obj{
+		TypeEncoding:   oType | oEncoding,
+		Value:          v,
+		lastAccessedAt: getCurrentClock(),
 	}
 
-	return &Obj{
-		TypeEncoding: oType | oEncoding,
-		Value:        v,
-		ExpiresAt:    int64(expiry),
+	if durationMs > 0 {
+		setExpiry(obj, uint32(durationMs))
 	}
+
+	return obj
 }
 
 func Put(k string, obj *Obj) {
@@ -30,24 +37,27 @@ func Put(k string, obj *Obj) {
 		evict()
 	}
 
+	obj.lastAccessedAt = getCurrentClock()
 	store[k] = obj
 	IncrementDbStat(0, "keys")
 }
 
 func Get(k string) *Obj {
 	// Active Delete
-	if obj, ok := store[k]; ok &&
-		obj.ExpiresAt != -1 &&
-		time.Now().UnixMilli() > obj.ExpiresAt {
+	obj, ok := store[k]
+	if ok && hasExpired(obj) {
 		Delete(k)
+		return nil
 	}
 
+	obj.lastAccessedAt = getCurrentClock()
 	return store[k]
 }
 
 func Delete(k string) bool {
-	if _, ok := store[k]; ok {
+	if obj, ok := store[k]; ok {
 		delete(store, k)
+		delete(expires, obj)
 		DecrementDbStat(0, "keys")
 		return true
 	}

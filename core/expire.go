@@ -5,18 +5,30 @@ import (
 	"time"
 )
 
+// expires; check for key and the expiry according to time
+func hasExpired(obj *Obj) bool {
+	exp, ok := expires[obj]
+	if !ok {
+		return false
+	}
+
+	return exp <= uint32(time.Now().UnixMilli())
+}
+
+func getExpiry(obj *Obj) (uint32, bool) {
+	exp, ok := expires[obj]
+	return exp, ok
+}
+
 // Simple Sampling
 func expireSample() float32 {
 	limit := 20
 	expiredCount := 0
 
 	for k, obj := range store {
-		if obj.ExpiresAt != -1 {
-			limit -= 1
-			if time.Now().UnixMilli() > obj.ExpiresAt {
-				Delete(k)
-				expiredCount++
-			}
+		if hasExpired(obj) {
+			Delete(k)
+			expiredCount++
 		}
 
 		if limit == 0 {
