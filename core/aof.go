@@ -16,7 +16,7 @@ func dumpKey(fp *os.File, k string, obj *Obj) {
 }
 
 func DumpAllAof() {
-	fp, err := os.OpenFile(config.AofFileName, os.O_CREATE|os.O_WRONLY, os.ModeAppend)
+	fp, err := os.OpenFile(config.AofFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return
 	}
