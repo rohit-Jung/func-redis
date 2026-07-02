@@ -134,7 +134,7 @@ func evalDELETE(args []string) []byte {
 
 func evalEXPIRE(args []string) []byte {
 	if len(args) != 2 {
-		return []byte(invalidArgsError("expire"))
+		return Encode(invalidArgsError("expire"), true)
 	}
 
 	key := args[0]
@@ -146,7 +146,7 @@ func evalEXPIRE(args []string) []byte {
 
 	duration, err := strconv.ParseInt(args[1], 10, 64)
 	if err != nil {
-		return []byte(errParseError)
+		return Encode(errParseError, true)
 	}
 
 	expirationMs := time.Now().UnixMilli() + duration*1000
@@ -157,16 +157,17 @@ func evalEXPIRE(args []string) []byte {
 // if no object creates and puts
 // increases it and stores the formatInt
 func evalINCR(args []string) []byte {
-	if len(args) < 0 {
+	if len(args) < 1 {
 		return Encode(invalidArgsError("incr"), true)
 	}
 
 	key := args[0]
 	obj := Get(key)
 
+	// dumb ways to die; if newObject then use that or reassign
 	if obj == nil {
-		newObj := NewObject("0", -1, OBJ_TYPE_STRING, OBJ_ENCODING_INT)
-		Put(key, newObj)
+		obj = NewObject("0", -1, OBJ_TYPE_STRING, OBJ_ENCODING_INT)
+		Put(key, obj)
 	}
 
 	// check encodings and type

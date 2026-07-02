@@ -4,7 +4,7 @@ import "fmt"
 
 // most significant 4 bits
 func getType(val uint8) uint8 {
-	return val & 0b1111000
+	return val & 0b11110000
 }
 
 // least significant 4 bits
