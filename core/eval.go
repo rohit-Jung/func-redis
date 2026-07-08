@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -104,11 +105,13 @@ func evalTTL(args []string) []byte {
 
 	// key exist but no expiry
 	exp, isExpSet := getExpiry(obj)
+	fmt.Println("Expiry", exp, obj.Value)
 	if !isExpSet {
 		return respOne
 	}
 
 	durationMs := exp - uint32(time.Now().UnixMilli())
+	fmt.Println("expiry du", durationMs)
 	if exp < uint32(time.Now().UnixMilli()) {
 		return respTwo
 	}
@@ -214,6 +217,21 @@ func evalClient() []byte {
 	return respOk
 }
 
+// just to test the graceful shutdown
+func evalSleep(args []string) []byte {
+	if len(args) != 1 {
+		return Encode(invalidArgsError("sleep"), true)
+	}
+
+	duration, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return Encode(errors.New("ERROR value is not an integer or out of range"), false)
+	}
+
+	time.Sleep(time.Duration(duration) * time.Second)
+	return respOk
+}
+
 func EvalCommand(cmds RedisCmds) ([]byte, error) {
 	buffer := bytes.NewBuffer(nil)
 
@@ -237,6 +255,8 @@ func EvalCommand(cmds RedisCmds) ([]byte, error) {
 			buffer.Write(evalINFO(cmd.Args))
 		case "INCR":
 			buffer.Write(evalINCR(cmd.Args))
+		case "SLEEP":
+			buffer.Write(evalSleep(cmd.Args))
 		case "CLIENT":
 			buffer.Write(evalClient())
 		case "LATENCY":

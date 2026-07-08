@@ -3,6 +3,9 @@ package server
 import (
 	"log"
 	"net"
+	"os"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -16,7 +19,40 @@ var maxClients int = 20_000
 var deletionFrequency time.Duration = 1 * time.Second
 var lastDeletedTime time.Time = time.Now()
 
-func RunAsyncServer() error {
+const EngineStatus_WAITING int32 = 1 << 1
+const EngineStatus_BUSY int32 = 1 << 2
+const EngineStatus_SHUTTING_DOWN int32 = 1 << 2
+
+var eStatus int32 = EngineStatus_WAITING
+
+func SignalHandelling(wg *sync.WaitGroup, sigs chan os.Signal) {
+	// defer done and keep receiving signals
+	defer wg.Done()
+	<-sigs
+
+	// wait if it is busy
+	// why do you need load ?
+	for atomic.LoadInt32(&eStatus) == EngineStatus_BUSY {
+	}
+
+	// CRITICAL TO HANDLE
+	// the server should not go to BUSY state between these two
+
+	// set the status to SHUTTING DOWN (only place we can do that)
+	atomic.StoreInt32(&eStatus, EngineStatus_SHUTTING_DOWN)
+
+	// shutdown
+	core.Shutdown()
+	os.Exit(0)
+}
+
+func RunAsyncServer(wg *sync.WaitGroup) error {
+	// when the function is done, set the status to shutting down
+	defer wg.Done()
+	defer func() {
+		atomic.StoreInt32(&eStatus, EngineStatus_SHUTTING_DOWN)
+	}()
+
 	log.Println("starting async tcp server on", config.Host, config.Port)
 
 	// what is the last arg proto ?
@@ -71,7 +107,10 @@ func RunAsyncServer() error {
 
 	// make events to hold new incoming events
 	events := make([]syscall.EpollEvent, maxClients)
-	for {
+
+	// we want to loop unless the Engine is SHUTTING_DOWN
+	for atomic.LoadInt32(&eStatus) != EngineStatus_SHUTTING_DOWN {
+
 		// last deleted time has passed
 		if time.Now().After(lastDeletedTime.Add(deletionFrequency)) {
 			core.DeleteExpiredKeys()
@@ -83,6 +122,24 @@ func RunAsyncServer() error {
 		// do  not break the loop
 		if err != nil {
 			continue
+		}
+
+		// after Epoll Wait file descripter is ready with an io so
+		// we want to set the engine state to busy here
+
+		// but what if the state is already shutting down
+		// hence we use compare and swap, only if the state is waiting we make it busy
+		swapSuccessful := atomic.CompareAndSwapInt32(&eStatus, EngineStatus_WAITING, EngineStatus_BUSY)
+
+		// if we could not swap meaning the state was either already busy or shutting down
+		if !swapSuccessful {
+			// so change it to shutting down
+			switch eStatus {
+			// if it was already shutting down then do not go below on to processing the IO events
+			case EngineStatus_SHUTTING_DOWN:
+				return nil
+			}
+
 		}
 
 		for i := range nevents {
@@ -124,6 +181,10 @@ func RunAsyncServer() error {
 				cmds.Respond(comm)
 			}
 		}
+
+		// processing is done so now we can mark the engine status to be waiting again
+		atomic.StoreInt32(&eStatus, EngineStatus_WAITING)
 	}
 
+	return nil
 }

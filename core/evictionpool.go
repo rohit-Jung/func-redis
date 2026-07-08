@@ -42,7 +42,7 @@ func (i ByIdleTime) Less(a, b int) bool {
 // if already exist return; check ePool size; append and sort
 // if top lastAccessedAt is greater then the key's then
 func (e *EvictionPool) Push(key string, lastAccessedAt uint32) {
-	_, ok := ePool.keyset[key]
+	_, ok := e.keyset[key]
 	if ok {
 		return
 	}
@@ -56,19 +56,22 @@ func (e *EvictionPool) Push(key string, lastAccessedAt uint32) {
 		e.keyset[key] = ePoolItem
 		e.ePool = append(e.ePool, ePoolItem)
 
-		// TODO: sort it, this is extremely inefficient try to optimize it
-		sort.Sort(ByIdleTime(e.ePool))
 	} else if lastAccessedAt > e.ePool[0].lastAccessedAt {
+		item := e.ePool[0]
 		e.ePool = e.ePool[1:]
 		e.keyset[key] = ePoolItem
 		e.ePool = append(e.ePool, ePoolItem)
+		delete(e.keyset, item.key)
 	}
+
+	// TODO: sort it, this is extremely inefficient try to optimize it
+	sort.Sort(ByIdleTime(e.ePool))
 }
 
 // Pop the first one and return the item
 // also delete it from keyset
 func (e *EvictionPool) Pop() *PoolItem {
-	if len(e.ePool) < 0 {
+	if len(e.ePool) == 0 {
 		return nil
 	}
 

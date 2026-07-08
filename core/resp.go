@@ -127,8 +127,8 @@ func Decode(data []byte) ([]any, error) {
 	return result, nil
 }
 
-func encodeString(v string) []byte {
-	return fmt.Appendf(nil, "+%s\r\n", v)
+func encodeBulkString(v string) []byte {
+	return fmt.Appendf(nil, "$%d\r\n%s\r\n", len(v), v)
 }
 
 func Encode(value any, isSimple bool) []byte {
@@ -136,15 +136,15 @@ func Encode(value any, isSimple bool) []byte {
 	switch v := value.(type) {
 	case string:
 		if isSimple {
-			return encodeString(v)
+			return fmt.Appendf(nil, "+%s\r\n", v)
 		}
 		return fmt.Appendf(nil, "$%d\r\n%s\r\n", len(v), value)
 	case int, int8, int16, int32, int64:
 		return fmt.Appendf(nil, ":%d\r\n", v)
 	case []string:
 		buf := bytes.NewBuffer(nil)
-		for _, val := range value.([]string) {
-			buf.Write(encodeString(val))
+		for _, val := range v {
+			buf.Write(encodeBulkString(val))
 		}
 
 		return fmt.Appendf(nil, "*%d\r\n%s", len(v), buf.Bytes())

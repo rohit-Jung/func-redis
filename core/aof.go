@@ -21,7 +21,11 @@ func DumpAllAof() {
 		return
 	}
 
+	fmt.Println("dumping aof")
+
 	for k, v := range store {
 		dumpKey(fp, k, v)
 	}
+
+	fmt.Println("dumping aof complete")
 }
