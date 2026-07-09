@@ -13,7 +13,6 @@ import (
 	"github.com/rohit-Jung/func-redis/core"
 )
 
-var connClients int = 0
 var maxClients int = 20_000
 
 var deletionFrequency time.Duration = 1 * time.Second
@@ -22,6 +21,13 @@ var lastDeletedTime time.Time = time.Now()
 const EngineStatus_WAITING int32 = 1 << 1
 const EngineStatus_BUSY int32 = 1 << 2
 const EngineStatus_SHUTTING_DOWN int32 = 1 << 2
+
+var connClients map[int]*core.Client
+
+// initialize connected clients
+func init() {
+	connClients = make(map[int]*core.Client)
+}
 
 var eStatus int32 = EngineStatus_WAITING
 
@@ -150,7 +156,9 @@ func RunAsyncServer(wg *sync.WaitGroup) error {
 					continue
 				}
 
-				connClients++
+				// set the connected client
+				connClients[fd] = core.NewClient(fd)
+
 				// set this fd also to non blocking
 				syscall.SetNonblock(fd, true)
 				// monitor this fd for events too
@@ -165,20 +173,26 @@ func RunAsyncServer(wg *sync.WaitGroup) error {
 				}
 			} else {
 				// else client is request for io
-				comm := &core.FDComm{
-					Fd: int(events[i].Fd),
-				}
-
-				// read command and respond
-				cmds, err := core.ReadCommands(comm)
-				if err != nil {
-					log.Print("Error reading command")
-					connClients -= 1
-					comm.Close()
+				// get the client from the map
+				client := connClients[int(events[i].Fd)]
+				if client == nil {
 					continue
 				}
 
-				cmds.Respond(comm)
+				// read command and respond
+				cmds, err := core.ReadCommands(client)
+
+				if err != nil {
+					log.Print("Error reading command")
+
+					// delete the connected client
+					delete(connClients, int(events[i].Fd))
+
+					client.Close()
+					continue
+				}
+
+				cmds.Respond(client)
 			}
 		}
 

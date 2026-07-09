@@ -59,7 +59,7 @@ func respondError(err error, conn io.ReadWriteCloser) {
 }
 
 func (cmds RedisCmds) Respond(conn io.ReadWriteCloser) {
-	buf, err := EvalCommand(cmds)
+	buf, err := EvalCommand(cmds, conn)
 	if err != nil {
 		log.Print("Encountered write error\t", err)
 		respondError(err, conn)
