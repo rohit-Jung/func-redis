@@ -14,6 +14,7 @@ func init() {
 	expires = make(map[*Obj]uint32)
 }
 
+// sets expiry; requires duration in Ms
 func setExpiry(obj *Obj, durationMs uint32) {
 	expires[obj] = uint32(time.Now().UnixMilli()) + durationMs
 }
@@ -45,13 +46,17 @@ func Put(k string, obj *Obj) {
 func Get(k string) *Obj {
 	// Active Delete
 	obj, ok := store[k]
-	if ok && hasExpired(obj) {
-		Delete(k)
-		return nil
+	// fault: if it exist then only you can access lastAccessedAt
+	if ok {
+		if hasExpired(obj) {
+			Delete(k)
+			return nil
+		}
+
+		obj.lastAccessedAt = getCurrentClock()
 	}
 
-	obj.lastAccessedAt = getCurrentClock()
-	return store[k]
+	return obj
 }
 
 func Delete(k string) bool {
