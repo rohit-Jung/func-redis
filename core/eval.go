@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 )
@@ -12,14 +13,24 @@ var errEvalPingInvalidArgs = "ERR wrong number of arguments for 'ping' command"
 var errSyntaxError = "ERR syntax error"
 var errParseError = "ERR value is not an integer or out of range"
 
+// initalize valid txn commands
+var txnCommands map[string]bool
+
+func init() {
+	txnCommands = map[string]bool{"EXEC": true, "DISCARD": true}
+}
+
 func invalidArgsError(cmd string) string {
 	return fmt.Sprintf("ERR wrong number of arguments for '%s' command", cmd)
 }
 
 var respNil = []byte("$-1\r\n")
 var respOk = []byte("+OK\r\n")
-var respTwo = []byte(":-2\r\n")
-var respOne = []byte(":-1\r\n")
+var respZero = []byte(":0\r\n")
+var respOne = []byte(":1\r\n")
+var respMinusTwo = []byte(":-2\r\n")
+var respMinusOne = []byte(":-1\r\n")
+var respQueued = []byte("+QUEUED\r\n")
 
 func evalPing(args []string) []byte {
 	if len(args) >= 2 {
@@ -45,7 +56,7 @@ func evalSET(args []string) []byte {
 
 	for i := 2; i < len(args); i++ {
 		switch args[i] {
-		case "EX", "ex":
+		case "EX", "ex", "Ex", "eX":
 			i++
 			// if there is no expiry given
 			if i == len(args) {
@@ -100,23 +111,23 @@ func evalTTL(args []string) []byte {
 
 	// key does not exist
 	if obj == nil {
-		return respTwo
+		return respMinusTwo
 	}
 
 	// key exist but no expiry
 	exp, isExpSet := getExpiry(obj)
-	fmt.Println("Expiry", exp, obj.Value)
 	if !isExpSet {
-		return respOne
+		return respMinusOne
 	}
 
-	durationMs := exp - uint32(time.Now().UnixMilli())
-	fmt.Println("expiry du", durationMs)
+	// key is expired; so return -2
 	if exp < uint32(time.Now().UnixMilli()) {
-		return respTwo
+		return respMinusTwo
 	}
 
-	return []byte(Encode(durationMs/1000, false))
+	// return the remaining time to expire
+	durationMs := exp - uint32(time.Now().UnixMilli())
+	return Encode(int64(durationMs/1000), false)
 }
 
 func evalDELETE(args []string) []byte {
@@ -144,16 +155,16 @@ func evalEXPIRE(args []string) []byte {
 	obj := Get(key)
 
 	if obj == nil {
-		return (Encode(0, false))
+		return respZero
 	}
 
-	duration, err := strconv.ParseInt(args[1], 10, 64)
+	durationSec, err := strconv.ParseInt(args[1], 10, 64)
 	if err != nil {
-		return Encode(errParseError, true)
+		return respOne
 	}
 
-	expirationMs := time.Now().UnixMilli() + duration*1000
-	setExpiry(obj, uint32(expirationMs))
+	// fault: we did not add in the current time it would be done by setExpiry
+	setExpiry(obj, uint32(durationSec*1000))
 	return Encode(1, false)
 }
 
@@ -232,40 +243,92 @@ func evalSleep(args []string) []byte {
 	return respOk
 }
 
-func EvalCommand(cmds RedisCmds) ([]byte, error) {
+func evalMULTI(c *Client) []byte {
+	c.TxnBegin()
+	return respOk
+}
+
+func evaluateCommand(cmd *RedisCmd, c *Client) []byte {
+	switch cmd.Cmd {
+	case "PING":
+		return evalPing(cmd.Args)
+	case "SET":
+		return evalSET(cmd.Args)
+	case "GET":
+		return evalGET(cmd.Args)
+	case "TTL":
+		return evalTTL(cmd.Args)
+	case "DEL":
+		return evalDELETE(cmd.Args)
+	case "EXPIRE":
+		return evalEXPIRE(cmd.Args)
+	case "COMMAND":
+		return evalPing(cmd.Args)
+	case "INFO":
+		return evalINFO(cmd.Args)
+	case "INCR":
+		return evalINCR(cmd.Args)
+	case "SLEEP":
+		return evalSleep(cmd.Args)
+	case "CLIENT":
+		return evalClient()
+	case "LATENCY":
+		return evalLatency()
+	case "BGREWRITEAOF":
+		return evalRewriteAOF()
+	case "MULTI":
+		return evalMULTI(c)
+	case "EXEC":
+		if !c.isTxn {
+			return []byte("ERR EXEC used without MULTI")
+		}
+
+		return c.TxnExec()
+	case "DISCARD":
+		if !c.isTxn {
+			return []byte("ERR DISCARD used without MULTI")
+		}
+
+		c.TxnDiscard()
+		return respOk
+	default:
+		return evalUnknown(cmd.Cmd, cmd.Args)
+	}
+}
+
+func evaluateCommandToBuffer(cmd *RedisCmd, buf *bytes.Buffer, c *Client) {
+	buf.Write(evaluateCommand(cmd, c))
+}
+
+func EvalCommand(cmds RedisCmds, c io.ReadWriteCloser) ([]byte, error) {
 	buffer := bytes.NewBuffer(nil)
 
 	for _, cmd := range cmds {
-		switch cmd.Cmd {
-		case "PING":
-			buffer.Write(evalPing(cmd.Args))
-		case "SET":
-			buffer.Write(evalSET(cmd.Args))
-		case "GET":
-			buffer.Write(evalGET(cmd.Args))
-		case "TTL":
-			buffer.Write(evalTTL(cmd.Args))
-		case "DEL":
-			buffer.Write(evalDELETE(cmd.Args))
-		case "EXPIRE":
-			buffer.Write(evalEXPIRE(cmd.Args))
-		case "COMMAND":
-			buffer.Write(evalPing(cmd.Args))
-		case "INFO":
-			buffer.Write(evalINFO(cmd.Args))
-		case "INCR":
-			buffer.Write(evalINCR(cmd.Args))
-		case "SLEEP":
-			buffer.Write(evalSleep(cmd.Args))
-		case "CLIENT":
-			buffer.Write(evalClient())
-		case "LATENCY":
-			buffer.Write(evalLatency())
-		case "BGREWRITEAOF":
-			buffer.Write(evalRewriteAOF())
-		default:
-			buffer.Write(evalUnknown(cmd.Cmd, cmd.Args))
+		// if it's not txns or the type assertion fails
+		// means it's a plain connection
+		client, ok := c.(*Client)
+		if !ok {
+			evaluateCommandToBuffer(cmd, buffer, client)
+			continue
 		}
+
+		if !client.isTxn {
+			evaluateCommandToBuffer(cmd, buffer, client)
+			continue
+		}
+
+		// now we are sure it's a transaction so do we execute
+		// or do we enque depends on if the command is either EXEC or DISCARD
+		if !txnCommands[cmd.Cmd] {
+			// if the command is not EXEC or DISCARD and it's transaction then enque
+			// and respond withe queued
+			client.TxnQueue(cmd)
+			buffer.Write(respQueued)
+		} else {
+			// it's EXEC or DISCARD evaluate accordingly
+			evaluateCommandToBuffer(cmd, buffer, client)
+		}
+
 	}
 
 	return buffer.Bytes(), nil
